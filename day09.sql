@@ -523,3 +523,195 @@ HAVING "급여평균" >= 2000 -- HAVING에 별칭은 사용할 수 없음
 ORA-00904: "급여평균": 부적합한 식별자
 00904. 00000 -  "%s: invalid identifier"
 */
+
+-- HAVING 절이 존재하는 경우 SELECT 구문의 실행 순서 정리
+/*
+ 1. FROM 절의 테이블 각 행 모두를 대상으로
+ 2. WHERE 절의 조건애 맞는 행만 선택하고
+ 3. GROUP BY 절에 나온 컬럼, 식(한수 식)으로 그룹화 진행
+ 4. HAVING   절의 조건을 만족시키는 그룹행만 성택
+ 5.          4까지 선택된 그룹 정보를 가진 행에 대해서
+ 6. SELECT   절에 명시된 컬럼, 식(함수,식)만 충력
+ 7. ORDER BY 가 있다면 정렬 조건에 맞추어 최종 정렬하여 결과 출력
+ */
+ ---------------------------------------------------------
+ 
+ -- 수업중 실습
+
+-- 1. 매니저별, 부하직원의 수를 구하고, 많은 순으로 정렬
+--   : mgr 컬럼이 그룹화 기준 컬럼
+SELECT e.mgr "매니저"
+     , COUNT(*) "부하직원의 수"
+  FROM emp e
+ GROUP BY e.mgr
+ ORDER BY "부하직원의 수" DESC
+;
+/*
+매니저, 부하직원의 수
+-------------------
+7698	5
+        4
+7839	3
+7566	1
+7782	1
+7902	1
+*/
+-- 2.1 부서별 인원을 구하고, 인원수 많은 순으로 정렬
+--    : deptno 컬럼이 그룹화 기준 컬럼
+SELECT e.deptno "부서"
+     , COUNT(*) "부서별 인원"
+  FROM emp e
+ GROUP BY e.deptno
+ ORDER BY "부서별 인원" DESC
+;
+/*
+부서, 부서별 인원
+---------------
+30	        6
+10	        3
+20	        3
+            3
+*/
+-- 2.2 부서 배치 미배정 인원 처리
+SELECT NVL(e.deptno || '', '부서 미배정') "부서"
+     , COUNT(*) "부서별 인원"
+  FROM emp e
+ GROUP BY e.deptno
+ ORDER BY "부서별 인원" DESC
+;
+/*
+부서,     부서별 인원
+-------------------
+30	            6
+10	            3
+20	            3
+부서 배치 미배정	3
+*/
+-- 3.1 직무별 급여 평균 구하고, 급여평균 높은 순으로 정렬
+--   : job 이 그룹화 기준 컬럼
+SELECT e.job "직무"
+     , TO_CHAR(AVG(e.sal), '$9,999.99') "급여평균"
+  FROM emp e
+ GROUP BY e.job
+ ORDER BY "급여평균" DESC
+;
+/*	
+직무,        급여평균
+-----------------------
+PRESIDENT	 $5,000.00
+ANALYST	    $3,000.00
+MANAGER	    $2,758.33
+SALESMAN    $1,400.00
+CLERK	    $1,016.67
+*/
+-- 3.2 job 이 null 인 데이터 처리
+SELECT NVL(e.job, '직무 미배정') "직무"
+     , TO_CHAR(AVG(e.sal), '$9,999.99') "급여평균"
+  FROM emp e
+ GROUP BY e.job
+ ORDER BY "급여평균" DESC
+;
+/*
+직무,       급여평균
+---------------------
+직무 미배정	
+PRESIDENT	$5,000.00
+ANALYST	    $3,000.00
+MANAGER	    $2,758.33
+SALESMAN	$1,400.00
+CLERK	    $1,016.67
+*/
+-- 4. 직무별 급여 총합 구하고, 총합 높은 순으로 정렬
+--   : job 이 그룹화 기준 컬럼
+SELECT e.job "직무"
+     , SUM(e.sal) "급여총합"
+  FROM emp e
+ GROUP BY e.job
+ ORDER BY "급여총합" DESC
+;
+/*
+직무,       급여총합
+-------------------
+	
+MANAGER	    8275
+SALESMAN	5600
+PRESIDENT	5000
+CLERK	    3050
+ANALYST	    3000
+*/
+
+-- 5. 급여의 앞단위가 1000미만, 1000, 2000, 3000, 5000 별로 인원수를 구하시오
+--    급여 단위 오름차순으로 정렬
+SELECT CASE WHEN e.sal < 1000                  THEN '1000 미만'
+            WHEN e.sal >= 1000 AND e.sal <2000 THEN '1000'
+            WHEN e.sal >= 2000 AND e.sal <3000 THEN '2000'
+            WHEN e.sal >= 3000 AND e.sal <5000 THEN '3000'
+            WHEN e.sal >= 5000                 THEN '5000'
+            ELSE '급여없음'
+        END AS "급여단위"         
+     , COUNT(*) "인원수"
+  FROM emp e
+ GROUP BY CASE  WHEN e.sal < 1000                  THEN '1000 미만'
+                WHEN e.sal >= 1000 AND e.sal <2000 THEN '1000'
+                WHEN e.sal >= 2000 AND e.sal <3000 THEN '2000'
+                WHEN e.sal >= 3000 AND e.sal <5000 THEN '3000'
+                WHEN e.sal >= 5000                 THEN '5000'
+                ELSE '급여없음'
+           END
+ ORDER BY "급여단위" 
+;
+
+SELECT NVL(TRUNC(e.sal,100) || '' , '급여없음') AS "급여단위"
+     , COUNT(*)  
+  FROM emp e
+ GROUP BY NVL(TRUNC(e.sal,100) || '' , '급여없음')
+ ORDER BY "급여단위" DESC
+;
+
+-- 6. 직무별 급여 합의 단위를 구하고, 급여 합의 단위가 큰 순으로 정렬
+SELECT e.job "직무"
+     ,SUBSTR(TO_CHAR(SUM(e.sal)),1,1)"급여 합의 단위"  
+  FROM emp e
+ GROUP BY e.job
+ ORDER BY "급여 합의 단위" DESC
+;
+/*
+직무,      급여 합의 단위
+------------------------
+	
+MANAGER	    8
+SALESMAN	5
+PRESIDENT	5
+CLERK	    3
+ANALYST	    3
+*/
+
+-- 7. 직무별 급여 평균이 2000이하인 경우를 구하고 평균이 높은 순으로 정렬
+SELECT e.job "직무"
+     , TO_CHAR(AVG(e.sal), '$9,999.99') "급여평균"
+  FROM emp e
+ GROUP BY e.job
+HAVING AVG(e.sal) <= 2000
+ ORDER BY "급여평균" DESC
+;
+/*
+직무,     급여평균
+------------------
+SALESMAN  $1,400.00
+CLERK	  $1,016.67
+*/
+
+-- 8. 년도별 입사 인원을 구하시오
+SELECT TO_CHAR(e.hiredate,'YY') "년도별"
+     , COUNT(*) "입사인원"
+  FROM emp e
+ GROUP BY TO_CHAR(e.hiredate,'YY')
+;
+/*
+년도별,    입사인원
+---------------------
+82	            1
+                3
+80	            1
+81	           10
+*/

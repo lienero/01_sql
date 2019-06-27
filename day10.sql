@@ -730,10 +730,26 @@ SELECT e.empno           "사번"
 
 -- 2.4) 부서별 소속 인원을 출력하시오.
 --      이때 부서 명으로 출력하시오.
+--      또한, 직원이 없는 부서도 출력하시오.
+
+SELECT d.dname  "부서명"
+     , count(e.empno) "인원(명)"
+  FROM emp e RIGHT OUTER JOIN dept d ON(e.deptno = d.deptno)
+ GROUP BY d.dname
+;
+/*
+부서 명, 인원(명)
+------------------
+RESEARCH	3
+SALES	    6
+ACCOUNTING	3
+OPERATIONS	0
+*/
+
+-- 2.5) 2.4의 결과에 부서가 미배정된 인원까지 출력하시오.
+--      이 때, 부서가 없는 직원은 '부서 미배정'으로 출력하시오.
 SELECT NVL(d.dname, '부서 미배정')  "부서명"
-     , count(*) "인원(명)"
-  FROM dept d
-     , emp e
- WHERE e.deptno = d.deptno(+)
+     , count(e.empno) "인원(명)"
+  FROM emp e FULL OUTER JOIN dept d ON(e.deptno = d.deptno)
  GROUP BY d.dname
 ;

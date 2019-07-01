@@ -317,11 +317,191 @@ SELECT m.*
   -- WHERE 조건절을 생략하면
   -- 항상 참인 결과와 동일하므로 모든 데이터가 복사되며 새 테이블 생성
 
+---------------------------------------------
+-- 테이블 수정(ALTER) 주의사항
+-- 1) 컬럼에 없을 때 : 
+--    모든 변경에 자유로움
+--    데이터 타입변경, 데이터 크기변경 모두 자유로움
 
+-- 2) 컬럼에 데이터가 있을 때
+--  : 데이터가 소실되면 안되므로 변경에 제약이 있음
+--    타입 변경은 같은 타입내에서만 가능
+--    문자 타입간에 CHAR -> VARCHAR2 변경 가능
+--    크기 변경은 동일 혹은 커지는 방향으로만 가능
+--    숫자 타입의 크기변경은 정밀도가 커지는 방향으로만 가능
 
+-- 예) MARCH_MEMBER 테이블에서 BIRTH_MONTH 컬럼의
+--     데이터 타입의 크기를 NUMBER(1) 로 줄이면
+ALTER TABLE MARCH_MEMBER MODIFY (BIRTH_MONTH NUMBER(1));
+/*
+ORA-01440: 정도 또는 자리수를 축소할 열은 비어 있어야 합니다
+01440. 00000 -  "column to be modified must be empty to decrease precision or scale"
+*/
+--         숫자 데이터의 정밀도가 증가하는 값으로 변경하면
+--         2 -> 10자리, 그 중 소수점 2자리
+ALTER TABLE MARCH_MEMBER MODIFY (BIRTH_MONTH NUMBER(10, 2));
 
+-- 숫자 데이터인 BIRTH_MONTH 컬럼을 문자 데이터로 변경
+ALTER TABLE MARCH_MEMBER MODIFY (BIRTH_MONTH VARCHAR2(1));
+/*
+ORA-01439: 데이터 유형을 변경할 열은 비어 있어야 합니다
+01439. 00000 -  "column to be modified must be empty to change datatype"
+*/
 
+-- MARCH_MEMBER 테이블의 모든 행에 대해서
+-- BIRTH_MONTH 컬럼의 값을 NULL 데이터로 변경하는 명령
+UPDATE "SCOTT"."MARCH_MEMBER"
+   SET BIRTH_MONTH = ''
+;
+COMMIT;
+/*
+6개 행 이(가) 업데이트되었습니다.
 
+커밋완료
+*/
+-- 데인터가 없는 컬럼으로 변경 후
+-- VARCHAR(2) 문자컬럼으로 변경
+ALTER TABLE MARCH_MEMBER MODIFY (BIRTH_MONTH VARCHAR(2) );
+-- Table MARCH_MEMBER이(가) 변경되었습니다.
 
+-- NUMBER(1) 숫자1자리 컬럼으로 변경
+ALTER TABLE MARCH_MEMBER MODIFY (BIRTH_MONTH NUMBER(1) );
+-- Table MARCH_MEMBER이(가) 변경되었습니다.
 
+-- 3) 기본 값(DEFAULT) 설정은 수정 이후 값부터 적용됨.
 
+-- 예) 3월 생인 멤버만 목사한 MARCH_MEMBER 테이블을 생각해보자.
+--   : BIRTH_MEONT 컬럼의 값이 항상 3 으로 고정되어도 될 것 같다.
+
+-- a)
+-- MARCH_MEMBER 테이블에
+-- BIRTH_MONTH 컬럼의 값이 없는 멤버 정보 1줄 추가
+INSERT INTO "SCOTT"."MARCH_MEMBER" (MEMBER_ID, MEMBER_NAME, PHONE, ADDRESS, MAJOR, GENDER) 
+VALUES ('M006', '함예은', '0437', '수원시', '컴공', 'F');
+COMMIT;
+
+-- b) a의 멤버 정보 추가 후 DEFAULT 설정 추가
+ALTER TABLE march_member MODIFY (BIRTH_MONTH DEFAULT 3);
+-- tabel MARCH_MEMBER이 (가) 변경되었습니다.
+
+-- c) MARCH_MEMBER 테이블에 DEFAULT 설정 추가 후
+--    새 멤버를 추가
+INSERT INTO "SCOTT"."MARCH_MEMBER" (MEMBER_ID, MEMBER_NAME, ADDRESS, MAJOR, GENDER) 
+VALUES ('M007', '홍길동', '율도국', '도술', 'M');
+COMMIT;
+
+--------------------------------------------------------
+-- 테이블 무결성 제약 조건 처리방법 4가지
+
+/*
+  MAIN_TABLE
+  -------------------------------------------
+  ID        VARCHAR2(10)    PRIMARY KEY
+  NICKNAME  VARCHAR2(30)    UNIQUE
+  REG_DATE  DATE            DEFAULT SYSDATE
+  GENDER    VARCHAR(1)      CHECK (GENDER IN ('M', 'F'))
+  MESSAGE   VARCHAR(300)
+  --------------------------------------------
+  
+  SUB_TABLE
+  ------------------------------------------------------
+  ID         VARCHAR2(10)    REFERENCES MAIN_TABLE(ID)
+                            (FK  FROM MAIN_TABLE.ID )
+  HOBBY      VARCHAR2(200)
+  BIRTH_YEAR NUMBER(4)
+  -----------------------------------------------------
+*/
+
+---- 1. 컬럼 정의할때, 제약 조건 이름 없이 바로 선언
+;
+DROP TABLE main_table1;
+CREATE TABLE main_table1
+(  ID        VARCHAR2(10)    PRIMARY KEY
+  ,NICKNAME  VARCHAR2(30)    UNIQUE
+  ,REG_DATE  DATE            DEFAULT SYSDATE
+  ,GENDER    VARCHAR(1)      CHECK (GENDER IN ('M', 'F'))
+  ,MESSAGE   VARCHAR(300)
+);
+-- Table MAIN_TABLE1이(가) 생성되었습니다.
+
+DROP TABLE SUB_TABLE1;
+CREATE TABLE SUB_TABLE1
+(  ID         VARCHAR2(10)    REFERENCES MAIN_TABLE1(ID)
+ , HOBBY      VARCHAR2(200)
+ , BIRTH_YEAR NUMBER(4) 
+);
+
+-- Table SUB_TABLE1이(가) 생성되었습니다.
+
+---- 2. 컬럼 정의할 때, 제약 조건 이름을 주며 선언
+DROP TABLE main_table2;
+CREATE TABLE main_table2
+(  ID        VARCHAR2(10)    CONSTRAINT PK_MAIN PRIMARY KEY
+  ,NICKNAME  VARCHAR2(30)    CONSTRAINT UK_NICKNAME UNIQUE
+  ,REG_DATE  DATE            DEFAULT SYSDATE
+  ,GENDER    VARCHAR(1)      CONSTRAINT CK_GENDER   CHECK (GENDER IN ('M', 'F'))
+  ,MESSAGE   VARCHAR(300)
+);
+-- Table MAIN_TABLE2이(가) 생성되었습니다.
+
+DROP TABLE SUB_TABLE2;
+CREATE TABLE SUB_TABLE2
+(  ID         VARCHAR2(10)    CONSTRAINT FK_SUB REFERENCES MAIN_TABLE2(ID)
+ , HOBBY      VARCHAR2(200)
+ , BIRTH_YEAR NUMBER(4) 
+);
+-- Table SUB_TABLE2이(가) 생성되었습니다.
+
+-- MAIN_TABLE1, MAIN_TABLE2 의 제약조건을 비교
+
+---- 3. 컬럼 정의 후 제약 조건 따로 선언
+DROP TABLE main_table3;
+CREATE TABLE main_table3
+(   ID        VARCHAR2(10)    
+  , NICKNAME  VARCHAR2(30)    
+  , REG_DATE  DATE            DEFAULT SYSDATE
+  , GENDER    VARCHAR(1)  
+  , MESSAGE   VARCHAR(300)
+  , CONSTRAINT PK_MAIN3      PRIMARY KEY (ID)
+  , CONSTRAINT UK_NICKNAME3  UNIQUE(NICKNAME)
+  , CONSTRAINT CK_GENDER3    CHECK (GENDER IN ('M', 'F'))
+);
+-- Table MAIN_TABLE3이(가) 생성되었습니다.
+
+DROP TABLE SUB_TABLE3;
+CREATE TABLE SUB_TABLE3
+(  ID         VARCHAR2(10)    
+ , HOBBY      VARCHAR2(200)
+ , BIRTH_YEAR NUMBER(4) 
+ , CONSTRAINT FK_SUB3 FOREIGN KEY(ID) REFERENCES MAIN_TABLE3(ID)
+ -- SUB_TABLE3 의 경우 PRIMARY KEY 를 ID, BIRTH_YEAR 의 복합키로 생성
+ -- 복합키로 PK를 삼으려는 경우는 반드시 제약조건 추가로만 생성가능
+ , CONSTRAINT PK_SUB3 PRIMARY KEY (ID, BIRTH_YEAR)
+);
+
+-- Table SUB_TABLE3이(가) 생성되었습니다.
+
+-- 추가 과제
+-- 실습 10)
+
+/* 세 개의 테이블을 생성하는 구문을 작성
+   3번 방식으로 작성
+   (3줄씩)
+------------------------------------------------   
+ GAME
+ GAME_CODE NUMBER(2)     PK      --게임 코드 10, 20, 30
+ GAME_NAME VARCHAR2(200) NOT NULL--게임 이름
+
+---------------------------------------------
+ GMEMBER
+ ID     VARCHAR2(4)     PK       --회원의 아이디 M001, M002, ......
+ NAME   VARCHAR2(15)    NOT NULL --회원의 이름
+
+-----------------------------------------------
+ MEMBER_GAME_HISTORY
+ ID         VARCHAR2(4)     FK 설정, FK 이름 : FK_ID
+                            GMEMBER 테이블의 ID 컬럼을 참조하도록 설정
+ YEAR       NUMBER(4)       -- 게임을 한 년도
+ GAME_CODE  NUMBER(2)       FK 설정, FK 이름 : FK_GAME_CODE
+                            GAME 테이블의 GAME_CODE 컬럼을 참조하도록 설정
+ 
